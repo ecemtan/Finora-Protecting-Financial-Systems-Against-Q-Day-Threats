@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database Store
+  postgres:
+    image: postgres:16-alpine
+    container_name: finora-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: finora
+      POSTGRES_USER: finora_user
+      POSTGRES_PASSWORD: finora_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finora_user -d finora"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Stream / Cache Broker
+  redis:
+    image: redis:7.2-alpine
+    container_name: finora-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Finora Core Backend
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: finora-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080" # REST API
+      - "9090:9090" # gRPC API
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=finora_user
+      - DB_PASSWORD=finora_password
+      - DB_NAME=finora
+      - REDIS_ADDR=redis:6379
+
+  # 4. Finora Hybrid Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: ./gateway/Dockerfile
+    container_name: finora-gateway
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8443:8443" # Hybrid TLS Port
+    environment:
+      - REDIS_ADDR=redis:6379
+      - FINORA_BACKEND_TARGET_URL=http://backend:8080
+
+volumes:
+  pgdata:
+  redisdata:

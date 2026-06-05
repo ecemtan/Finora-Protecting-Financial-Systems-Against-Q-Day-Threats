@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package finora.mvp.v1;
+
+option go_package = "github.com/finora/mvp/proto/v1;finorapb";
+
+// Service managing gateway proxy config checkins and scanner reports
+service TelemetryService {
+  // Report static or network scanner findings
+  rpc ReportScanResults(ScanReportRequest) returns (ScanReportResponse);
+
+  // Read active security configuration for gateway nodes
+  rpc GetGatewayConfig(GatewayConfigRequest) returns (GatewayConfigResponse);
+}
+
+message ScanReportRequest {
+  string asset_id = 1;
+  repeated CbomItem items = 2;
+}
+
+message CbomItem {
+  string file_path_or_url = 1;
+  string category = 2;             // e.g. "asymmetric_encryption", "digital_signature"
+  string algorithm_used = 3;       // e.g. "RSA-2048", "ECDSA-P256"
+  bool is_quantum_safe = 4;
+  string violation_severity = 5;   // "low", "medium", "high", "critical"
+  string violation_description = 6;
+}
+
+message ScanReportResponse {
+  bool success = 1;
+  int32 violations_recorded = 2;
+}
+
+message GatewayConfigRequest {
+  string gateway_id = 1;
+}
+
+message GatewayConfigResponse {
+  string policy_name = 1;
+  bool enforce_hybrid = 2;
+  int32 mtu_limit = 3;
+}
